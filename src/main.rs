@@ -13,6 +13,8 @@ use std::{
     process::exit,
 };
 
+mod comments;
+
 use anyhow::{Context, Result};
 use encoding_rs::{SHIFT_JIS, UTF_8};
 use num::Zero;
@@ -286,8 +288,17 @@ fn encode_file(handle: HANDLE, path: &Path) {
         Err(e) => fail!("sjiswrap: File {} is not valid UTF-8: {}", path.display(), e),
     };
     let (encoded, _, error) = SHIFT_JIS.encode(str);
+    // Characters Shift JIS can't encode become numeric character references. In a comment that changes nothing
     if error {
-        eprintln!("sjiswrap: File {} contains Shift JIS encoding errors", path.display());
+        if let Some((line, c)) = comments::find_unencodable_outside_comments(str) {
+            eprintln!(
+                "sjiswrap: {}:{}: '{}' (U+{:04X}) has no Shift JIS encoding",
+                path.display(),
+                line,
+                c,
+                c as u32
+            );
+        }
     }
     match encoded {
         Cow::Borrowed(_) => {
